@@ -18,7 +18,7 @@ serde = ["dep:serde"]
 std = []
 
 [dependencies]
-serde = { package = "serde_core", version = "1.0.220", optional = true, default-features = false }
+serde = { package = "serde_core", version = "1.0.220", optional = true, default-features = false, features = ["alloc"] }
 
 [target.'cfg(any())'.dependencies]
 serde = { version = "1.0.220", optional = true, default-features = false }

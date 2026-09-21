@@ -11,4 +11,7 @@ fn test() {
     assert_send_sync::<semver::Version>();
     assert_send_sync::<semver::VersionReq>();
     assert_send_sync::<semver::Op>();
+    assert_send_sync::<semver::Intersection>();
+    assert_send_sync::<semver::ReqConflict>();
+    assert_send_sync::<semver::ConflictReason>();
 }

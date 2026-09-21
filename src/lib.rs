@@ -94,16 +94,19 @@ mod eval;
 mod identifier;
 mod impls;
 mod parse;
+mod satisfy;
 
 #[cfg(feature = "serde")]
 mod serde;
 
 use crate::identifier::Identifier;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::str::FromStr;
 
 pub use crate::parse::Error;
+pub use crate::satisfy::{Conflict as ReqConflict, ConflictReason, Intersection};
 
 /// **SemVer version** as defined by <https://semver.org>.
 ///
@@ -513,6 +516,65 @@ impl VersionReq {
     pub fn matches(&self, version: &Version) -> bool {
         eval::matches_req(self, version)
     }
+
+    /// Compute the intersection of `self` with `other`.
+    ///
+    /// If any version satisfies both requirements, the result is
+    /// [`Intersection::Witness`] holding the *least* such version; otherwise it
+    /// is [`Intersection::Unsatisfiable`] describing the incompatibility.
+    ///
+    /// # Ordering of the witness
+    ///
+    /// The witness is the least satisfying version under the SemVer
+    /// *precedence* ordering used by [`Version::cmp_precedence`]: first by
+    /// `(major, minor, patch)`, then the pre-release order in which every
+    /// pre-release of a triple precedes its ordinary release. Build metadata
+    /// is not part of precedence, so the returned version always has empty
+    /// build metadata (versions differing only in build metadata all match).
+    ///
+    /// The witness is deterministic and is itself matched by both
+    /// `self.matches` and `other.matches`.
+    ///
+    /// # Pre-releases
+    ///
+    /// Cargo only lets a pre-release satisfy a [`VersionReq`] if one of *that
+    /// requirement's own* comparators names the identical
+    /// `major.minor.patch` with a non-empty pre-release. For the intersection,
+    /// a pre-release witness must therefore be authorized by a comparator of
+    /// `self` and independently by a comparator of `other`. The algorithm
+    /// reasons about this at the comparator-semantics level; it never scans a
+    /// bounded list of candidate releases.
+    ///
+    /// A conjunction of Cargo comparators always has a least satisfying
+    /// version when it is satisfiable at all, so no "satisfiable without a
+    /// minimum" outcome is reported. In particular the order-theoretic gap
+    /// immediately below an ordinary release is never crossed by inventing a
+    /// successor: an open stable bound such as `>1.2.3, <1.2.4` is reported as
+    /// unsatisfiable because the only versions in between are pre-releases
+    /// that no comparator authorizes.
+    ///
+    /// # Complexity
+    ///
+    /// Linear in the total number of comparators (`O(n + m)`), with two
+    /// symbolic candidate triples inspected regardless of component values.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use semver::{Intersection, VersionReq};
+    ///
+    /// let a = VersionReq::parse(">=1.0.0, <2.0.0").unwrap();
+    /// let b = VersionReq::parse("^1.5").unwrap();
+    /// if let Intersection::Witness(version) = a.intersection(&b) {
+    ///     assert_eq!(version.to_string(), "1.5.0");
+    /// } else {
+    ///     panic!("the requirements overlap");
+    /// }
+    /// ```
+    #[must_use]
+    pub fn intersection(&self, other: &VersionReq) -> Intersection {
+        satisfy::intersection(self, other)
+    }
 }
 
 /// The default VersionReq is the same as [`VersionReq::STAR`].
@@ -547,6 +609,17 @@ impl Prerelease {
 
     pub fn is_empty(&self) -> bool {
         self.identifier.is_empty()
+    }
+
+    // SAFETY: text must be a valid pre-release identifier as accepted by
+    // `Prerelease::new`.
+    pub(crate) unsafe fn new_unchecked(text: String) -> Self {
+        // SAFETY: text is a pre-release identifier accepted by `new`.
+        unsafe {
+            Prerelease {
+                identifier: Identifier::new_unchecked(&text),
+            }
+        }
     }
 }
 

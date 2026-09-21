@@ -45,6 +45,32 @@ fn main() {
 
 <br>
 
+## Intersection of requirements
+
+Besides testing one version against a requirement with [`VersionReq::matches`],
+you can ask whether two requirements have any version in common, and get back
+the least such version, without enumerating versions:
+
+```rust
+use semver::{Intersection, VersionReq};
+
+let one = VersionReq::parse(">=1.0.0, <2.0.0").unwrap();
+let two = VersionReq::parse("^1.5").unwrap();
+match one.intersection(&two) {
+    Intersection::Witness(version) => assert_eq!(version.to_string(), "1.5.0"),
+    Intersection::Unsatisfiable(conflict) => panic!("{conflict}"),
+    _ => unreachable!(),
+}
+```
+
+The witness is the least satisfying version by SemVer precedence (build
+metadata ignored), is deterministic, and is matched by both requirements.
+Cargo's pre-release rule is honored: a pre-release is admitted by a
+requirement only when that requirement names the same `major.minor.patch`
+with a non-empty pre-release.
+
+<br>
+
 ## Scope of this crate
 
 Besides Cargo, several other package ecosystems and package managers for other

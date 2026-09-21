@@ -167,7 +167,7 @@ fn matches_caret(cmp: &Comparator, ver: &Version) -> bool {
     ver.pre >= cmp.pre
 }
 
-fn pre_is_compatible(cmp: &Comparator, ver: &Version) -> bool {
+pub(crate) fn pre_is_compatible(cmp: &Comparator, ver: &Version) -> bool {
     cmp.major == ver.major
         && cmp.minor == Some(ver.minor)
         && cmp.patch == Some(ver.patch)
